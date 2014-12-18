@@ -2,13 +2,11 @@
 
 // ====[ INCLUDES ]====================================================
 #include <sourcemod>
-#include <tf2_stocks>
-#include <entity_prop_stocks>
 #include <sdkhooks>
 #include <colors> 
 
 // ====[ CONSTANTS ]===================================================
-#define PL_VERSION "1.0.7" 
+#define PL_VERSION "0.0.1" 
 #define MAX_FILE_LEN 80
 #define MAXARENAS 31
 #define MAXSPAWNS 15
@@ -50,13 +48,11 @@ new bool:g_bNoDisplayRating;
 
 // HUD Handles
 new Handle:hm_HP = INVALID_HANDLE,
-	Handle:hm_Airshot = INVALID_HANDLE,
 	Handle:hm_Score = INVALID_HANDLE,
 	Handle:hm_Accuracy = INVALID_HANDLE;
 	
 // Global Variables
 new String:g_sMapName[64],
-	Float:g_fMeatshotPercent,
 	bool:g_bBlockFallDamage,
 	bool:g_bUseSQLite,
 	bool:g_bAutoCvar,
@@ -72,24 +68,12 @@ new Handle:db = INVALID_HANDLE, // Connection to SQL database.
 // Global CVar Handles
 new Handle:gcvar_WfP = INVALID_HANDLE,
 	Handle:gcvar_fragLimit = INVALID_HANDLE,
-	Handle:gcvar_allowedClasses = INVALID_HANDLE,
 	Handle:gcvar_blockFallDamage = INVALID_HANDLE,
 	Handle:gcvar_dbConfig = INVALID_HANDLE,
-	Handle:gcvar_midairHP = INVALID_HANDLE,
-	Handle:gcvar_airshotHeight = INVALID_HANDLE,
-	Handle:gcvar_RocketForceX = INVALID_HANDLE,
-	Handle:gcvar_RocketForceY = INVALID_HANDLE,
-	Handle:gcvar_RocketForceZ = INVALID_HANDLE,
 	Handle:gcvar_autoCvar = INVALID_HANDLE,
-	Handle:gcvar_bballParticle_red = INVALID_HANDLE,
-	Handle:gcvar_bballParticle_blue = INVALID_HANDLE,
-	Handle:gcvar_meatshotPercent = INVALID_HANDLE,
 	Handle:gcvar_noDisplayRating = INVALID_HANDLE,
 	Handle:gcvar_stats = INVALID_HANDLE,
 	Handle:gcvar_reconnectInterval = INVALID_HANDLE;
-	
-// Classes
-new g_tfctClassAllowed[TFClassType]; // Special "TFClass_Type" data type.
 
 // Arena Vars
 new String:g_sArenaName[MAXARENAS+1][64],
@@ -98,12 +82,8 @@ new String:g_sArenaName[MAXARENAS+1][64],
 	Float:g_fArenaHPRatio[MAXARENAS+1],
 	Float:g_fArenaMinSpawnDist[MAXARENAS+1],
 	Float:g_fArenaRespawnTime[MAXARENAS+1],
-	bool:g_bArenaAmmomod[MAXARENAS+1],
-	bool:g_bArenaMidair[MAXARENAS+1],
 	bool:g_bArenaMGE[MAXARENAS+1],
 	bool:g_bArenaEndif[MAXARENAS+1],
-	bool:g_bArenaBBall[MAXARENAS+1],
-	bool:g_bVisibleHoops[MAXARENAS+1],
 	bool:g_bArenaInfAmmo[MAXARENAS+1],
 	bool:g_bArenaShowHPToPlayers[MAXARENAS+1],
 	g_iArenaCount,
@@ -116,17 +96,13 @@ new String:g_sArenaName[MAXARENAS+1][64],
 	g_iArenaMaxRating[MAXARENAS+1],
 	g_iArenaCdTime[MAXARENAS+1],
 	g_iArenaSpawns[MAXARENAS+1],
-	g_iBBallHoop[MAXARENAS+1][3], // [What arena the hoop is in][Hoop 1 or Hoop 2]
-	g_iBBallIntel[MAXARENAS+1],
 	g_iArenaEarlyLeave[MAXARENAS+1],
 	g_tfctArenaAllowedClasses[MAXARENAS+1][TFClassType]; // Special "TFClass_Type" data type.
 
 // Player vars
 new Handle:g_hWelcomeTimer[MAXPLAYERS+1],
 	String:g_sPlayerSteamID[MAXPLAYERS+1][32],//saving steamid
-	bool:g_bPlayerTakenDirectHit[MAXPLAYERS+1],//player was hit directly
 	bool:g_bPlayerRestoringAmmo[MAXPLAYERS+1],//player is awaiting full ammo restore
-	bool:g_bPlayerHasIntel[MAXPLAYERS+1],
 	bool:g_bHitBlip[MAXPLAYERS+1],
 	bool:g_bShowHud[MAXPLAYERS+1] = true,
 	g_iPlayerAttackUsedWeaponIdx[MAXPLAYERS+1],
@@ -141,25 +117,12 @@ new Handle:g_hWelcomeTimer[MAXPLAYERS+1],
 	g_iPlayerLosses[MAXPLAYERS+1],
 	g_iPlayerRating[MAXPLAYERS+1],
 	g_iPlayerHandicap[MAXPLAYERS+1],
-	TFClassType:g_tfctPlayerClass[MAXPLAYERS+1];
 	
 // Bot things
 new bool:g_bPlayerAskedForBot[MAXPLAYERS+1];
-		
-// Midair
-new g_iMidairHP;
 	
 // Debug log
 new String:g_sLogFile[PLATFORM_MAX_PATH];
-	
-// Endif
-new Float:g_fRocketForceX,
-	Float:g_fRocketForceY,
-	Float:g_fRocketForceZ;
-	
-// Bball
-new String:g_sBBallParticleRed[64],
-	String:g_sBBallParticleBlue[64];
 	
 // Stat tracking
 new	String:g_sWeaponName[MAXWEAPONS+1][64],
@@ -169,8 +132,6 @@ new	String:g_sWeaponName[MAXWEAPONS+1][64],
 	g_iPlayerShotCount[MAXPLAYERS+1][MAXWEAPONS+1],
 	g_iPlayerHitCount[MAXPLAYERS+1][MAXWEAPONS+1],
 	g_iPlayerDamageDealt[MAXPLAYERS+1][MAXWEAPONS+1],
-	g_iPlayerDirectHitCount[MAXPLAYERS+1][MAXWEAPONS+1],
-	g_iPlayerAirshotCount[MAXPLAYERS+1][MAXWEAPONS+1],
 	g_iPreviousAmmo[MAXPLAYERS+1], // Ammo of player in the last gameframe
 	g_iPlayerWeaponIndex[MAXPLAYERS+1], // Index of the currently equipped weapon in TFWeapon_Track array. -1 if weapon is not tracked
 	g_iPlayerWeapon[MAXPLAYERS+1], // Handle of the currently equipped weapon of a player
@@ -178,19 +139,13 @@ new	String:g_sWeaponName[MAXWEAPONS+1][64],
 
 static const String:stockSounds[][]= // Sounds that do not need to be downloaded.
 { 						"buttons/button17.wav",
-						"vo/intel_teamcaptured.wav",
-						"vo/intel_teamdropped.wav",
-						"vo/intel_teamstolen.wav",
-						"vo/intel_enemycaptured.wav",
-						"vo/intel_enemydropped.wav",
-						"vo/intel_enemystolen.wav",
 						"items/spawn_item.wav"
 };
 
 public Plugin:myinfo =
 {
-  name = "MGEMod",
-  author = "Lange; based on kAmmomod by Krolus.",
+  name = "CSGO MGE",
+  author = "Cprice, based on MGEMod by Lange.",
   description = "Duel mod with realistic game situations.",
   version = PL_VERSION,
   url = "https://github.com/Langeh/MGEMod, http://steamcommunity.com/id/langeh"
@@ -219,20 +174,11 @@ public OnPluginStart()
 	//ConVars
 	CreateConVar("sm_mgemod_version", PL_VERSION, "MGEMod version", FCVAR_PLUGIN|FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY);
 	gcvar_fragLimit = CreateConVar("mgemod_fraglimit", "3", "Default frag limit in duel", FCVAR_PLUGIN,true, 1.0);
-	gcvar_allowedClasses = CreateConVar("mgemod_allowed_classes", "soldier demoman scout", "Classes that players allowed to choose by default", FCVAR_PLUGIN);
 	gcvar_blockFallDamage = CreateConVar("mgemod_blockdmg_fall", "0", "Block falldamage? (0 = Disabled)", FCVAR_PLUGIN, true, 0.0, true, 1.0);
 	gcvar_dbConfig = CreateConVar("mgemod_dbconfig", "mgemod", "Name of database config", FCVAR_PLUGIN);
 	gcvar_stats = CreateConVar("mgemod_stats", "1", "Enable/Disable stats.", FCVAR_PLUGIN);
-	gcvar_airshotHeight = CreateConVar("mgemod_airshot_height", "80", "The minimum height at which it will count airshot", FCVAR_PLUGIN, true, 10.0, true, 500.0);
-	gcvar_RocketForceX = CreateConVar("mgemod_endif_force_x", "1.1", "The amount by which to multiply the X push force on Endif.", FCVAR_PLUGIN, true, 1.0, true, 10.0);
-	gcvar_RocketForceY = CreateConVar("mgemod_endif_force_y", "1.1", "The amount by which to multiply the Y push force on Endif.", FCVAR_PLUGIN, true, 1.0, true, 10.0);
-	gcvar_RocketForceZ = CreateConVar("mgemod_endif_force_z", "2.15", "The amount by which to multiply the Z push force on Endif.", FCVAR_PLUGIN, true, 1.0, true, 10.0);
 	gcvar_autoCvar = CreateConVar("mgemod_autocvar", "1", "Automatically set reccomended game cvars? (0 = Disabled)", FCVAR_PLUGIN, true, 0.0, true, 1.0);
-	gcvar_bballParticle_red = CreateConVar("mgemod_bball_particle_red", "player_intel_trail_red", "Particle effect to attach to Red players in BBall.", FCVAR_PLUGIN);
-	gcvar_bballParticle_blue = CreateConVar("mgemod_bball_particle_blue", "player_intel_trail_blue", "Particle effect to attach to Blue players in BBall.", FCVAR_PLUGIN);
 	gcvar_WfP = FindConVar("mp_waitingforplayers_cancel");
-	gcvar_midairHP = CreateConVar("mgemod_midair_hp", "5", "", FCVAR_PLUGIN, true, 1.0);
-	gcvar_meatshotPercent = CreateConVar("mgemod_meatshot_percent", "0.9", "Percent of a weapon's max damage must that be achieved to count as a meatshot.", FCVAR_PLUGIN, true, 0.1, true, 1.0);
 	gcvar_noDisplayRating = CreateConVar("mgemod_hide_rating", "0", "Hide the in-game display of rating points. They will still be tracked in the database.", FCVAR_PLUGIN);
 	gcvar_reconnectInterval = CreateConVar("mgemod_reconnect_interval", "5", "How long (in minutes) to wait between database reconnection attempts.", FCVAR_PLUGIN);
 	
@@ -241,20 +187,9 @@ public OnPluginStart()
 	g_bBlockFallDamage = GetConVarInt(gcvar_blockFallDamage) ? true : false;
 	GetConVarString(gcvar_dbConfig,g_sDBConfig,sizeof(g_sDBConfig));
 	g_bNoStats = (GetConVarBool(gcvar_stats)) ? false : true;
-	g_iAirshotHeight = GetConVarInt(gcvar_airshotHeight);
-	g_iMidairHP = GetConVarInt(gcvar_midairHP);
-	g_fRocketForceX = GetConVarFloat(gcvar_RocketForceX);
-	g_fRocketForceY = GetConVarFloat(gcvar_RocketForceY);
-	g_fRocketForceZ = GetConVarFloat(gcvar_RocketForceZ);
 	g_bAutoCvar = GetConVarInt(gcvar_autoCvar) ? true : false;
-	g_fMeatshotPercent = GetConVarFloat(gcvar_meatshotPercent);
-	GetConVarString(gcvar_bballParticle_red, g_sBBallParticleRed, sizeof(g_sBBallParticleRed));
-	GetConVarString(gcvar_bballParticle_blue, g_sBBallParticleBlue, sizeof(g_sBBallParticleBlue));
 	g_bNoDisplayRating = GetConVarInt(gcvar_noDisplayRating) ? true : false;
 	g_iReconnectInterval = GetConVarInt(gcvar_reconnectInterval);
-	
-	// Parse default list of allowed classes.
-	ParseAllowedClasses("",g_tfctClassAllowed);
 	
 	// Only connect to the SQL DB if stats are enabled.
 	if(!g_bNoStats)
@@ -269,19 +204,10 @@ public OnPluginStart()
 
 	// Hook convar changes.
 	HookConVarChange(gcvar_fragLimit, handler_ConVarChange);
-	HookConVarChange(gcvar_allowedClasses, handler_ConVarChange);
 	HookConVarChange(gcvar_blockFallDamage, handler_ConVarChange);
 	HookConVarChange(gcvar_dbConfig, handler_ConVarChange);
 	HookConVarChange(gcvar_stats, handler_ConVarChange);
-	HookConVarChange(gcvar_airshotHeight, handler_ConVarChange);
-	HookConVarChange(gcvar_midairHP, handler_ConVarChange);
-	HookConVarChange(gcvar_RocketForceX, handler_ConVarChange);
-	HookConVarChange(gcvar_RocketForceY, handler_ConVarChange);
-	HookConVarChange(gcvar_RocketForceZ, handler_ConVarChange);
 	HookConVarChange(gcvar_autoCvar, handler_ConVarChange);
-	HookConVarChange(gcvar_meatshotPercent, handler_ConVarChange);
-	HookConVarChange(gcvar_bballParticle_red, handler_ConVarChange);
-	HookConVarChange(gcvar_bballParticle_blue, handler_ConVarChange);
 	HookConVarChange(gcvar_noDisplayRating, handler_ConVarChange);
 	HookConVarChange(gcvar_reconnectInterval, handler_ConVarChange);
 
@@ -297,16 +223,15 @@ public OnPluginStart()
 	RegConsoleCmd("stats", Command_Rank, "Alias for \"rank\".");
 	RegConsoleCmd("mgehelp", Command_Help);
 	RegConsoleCmd("first", Command_First, "Join the first available arena.");
-	RegConsoleCmd("handicap", Command_Handicap, "Reduce your maximum HP. Type '!handicap off' to disable.");
+	//TODO fix that shit
+	//RegConsoleCmd("handicap", Command_Handicap, "Reduce your maximum HP. Type '!handicap off' to disable.");
 	RegConsoleCmd("spec_next", Command_Spec);
 	RegConsoleCmd("spec_prev", Command_Spec);
-	RegConsoleCmd("joinclass", Command_JoinClass);
 	RegAdminCmd("loc", Command_Loc, ADMFLAG_BAN, "Shows client origin and angle vectors");
 	RegAdminCmd("botme", Command_AddBot, ADMFLAG_BAN, "Add bot to your arena");
 	RegAdminCmd("conntest", Command_ConnectionTest, ADMFLAG_BAN, "MySQL connection test");
 	
 	// Create the HUD text handles for later use.
-	hm_Airshot = CreateHudSynchronizer();
 	hm_HP = CreateHudSynchronizer();
 	hm_Score = CreateHudSynchronizer();
 	hm_Accuracy = CreateHudSynchronizer();
@@ -344,26 +269,12 @@ public OnMapStart()
 	for (new i=0;i<=STOCK_SOUND_COUNT;i++) /* Stock sounds are considered mandatory. */
 		PrecacheSound(stockSounds[i], true);
 	
-	// Models. These are used for the artifical flag in BBall.
-	PrecacheModel(MODEL_BRIEFCASE, true);
-	PrecacheModel(MODEL_AMMOPACK, true);
-	
 	g_bNoStats = (GetConVarBool(gcvar_stats)) ? false : true; /* Reset this variable, since it is forced to false during Event_WinPanel */
 	
 	// Spawns
 	new isMapAm = LoadSpawnPoints();
 	if(isMapAm)
 	{
-		for (new i = 0;i<=g_iArenaCount;i++)
-		{
-			if(g_bArenaBBall[i])
-			{
-				g_iBBallHoop[i][SLOT_ONE] = -1;
-				g_iBBallHoop[i][SLOT_TWO] = -1;
-				g_iBBallIntel[i] = -1;
-			}
-		}
-		
 		CreateTimer(1.0, Timer_SpecHudToAllArenas, _, TIMER_FLAG_NO_MAPCHANGE|TIMER_REPEAT);
 		
 		if(g_bAutoCvar)
@@ -425,8 +336,7 @@ public OnMapEnd()
  * -------------------------------------------------------------------------- */
 public OnEntityCreated(entity, const String:classname[])
 {
-	if(StrEqual(classname,"tf_projectile_rocket") || StrEqual(classname,"tf_projectile_pipe"))
-		SDKHook(entity, SDKHook_Touch, OnProjectileTouch);
+
 }
 
 /* OnProjectileTouch(entity, other)
@@ -436,8 +346,7 @@ public OnEntityCreated(entity, const String:classname[])
  * -------------------------------------------------------------------------- */
 public OnProjectileTouch(entity, other)
 {
-	if(other>0 && other<=MaxClients)
-		g_bPlayerTakenDirectHit[other] = true;
+	
 }
 
 /* OnClientPostAdminCheck(client)
@@ -569,14 +478,6 @@ public OnGameFrame()
 		if (IsValidClient(client) && IsPlayerAlive(client))
 		{	
 			arena_index = g_iPlayerArena[client];
-			if(!g_bArenaBBall[arena_index] && !g_bArenaMGE[arena_index])
-			{
-				/*	This is a hack that prevents people from getting one-shot by things
-				like the direct hit in the Ammomod arenas. */
-				new replacement_hp = (g_iPlayerMaxHP[client] + 512);
-				SetEntProp(client, Prop_Send, "m_iHealth", replacement_hp, 1);
-			}
-			
 			DetectShot(client);
 		}
 	}
@@ -604,17 +505,17 @@ public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damage
 	GetEdictClassname(inflictor, classname, sizeof(classname));
 	if (attacker > 0 && victim != attacker) /* If the attacker wasn't the person being hurt, or the world (fall damage). */
 	{
-		if(IsValidEntity(inflictor))
-		{
-			if(StrEqual(classname,"tf_projectile_pipe_remote"))		/* Projectile belonged to a secondary weapon slot. */
-				g_iPlayerAttackUsedWeaponIdx[attacker] = GetWeaponIndex(GetPlayerWeaponSlot(attacker, 1));
-			else if(StrEqual(classname,"tf_projectile_stun_ball"))	/* Projectile belonged to a melee weapon slot. */
-				g_iPlayerAttackUsedWeaponIdx[attacker] = GetWeaponIndex(GetPlayerWeaponSlot(attacker, 2));
-			else if(StrContains(classname,"tf_projectile_") == 0)	/* Projectile belonged to a primary weapon slot. */
-				g_iPlayerAttackUsedWeaponIdx[attacker] = GetWeaponIndex(GetPlayerWeaponSlot(attacker, 0));
-			else													/* Wasn't a projectile weapon. */
-				g_iPlayerAttackUsedWeaponIdx[attacker] = g_iPlayerWeaponIndex[attacker];
-		}
+		// if(IsValidEntity(inflictor))
+		// {
+			// if(StrEqual(classname,"tf_projectile_pipe_remote"))		/* Projectile belonged to a secondary weapon slot. */
+				// g_iPlayerAttackUsedWeaponIdx[attacker] = GetWeaponIndex(GetPlayerWeaponSlot(attacker, 1));
+			// else if(StrEqual(classname,"tf_projectile_stun_ball"))	/* Projectile belonged to a melee weapon slot. */
+				// g_iPlayerAttackUsedWeaponIdx[attacker] = GetWeaponIndex(GetPlayerWeaponSlot(attacker, 2));
+			// else if(StrContains(classname,"tf_projectile_") == 0)	/* Projectile belonged to a primary weapon slot. */
+				// g_iPlayerAttackUsedWeaponIdx[attacker] = GetWeaponIndex(GetPlayerWeaponSlot(attacker, 0));
+			// else													/* Wasn't a projectile weapon. */
+				// g_iPlayerAttackUsedWeaponIdx[attacker] = g_iPlayerWeaponIndex[attacker];
+		// }
 	}
 	
 	return Plugin_Continue;
@@ -638,133 +539,6 @@ public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:ang
 	}
 }
 
-/* OnTouchHoop(entity, other)
-*
-* When a hoop is touched by a player in BBall.
-* -------------------------------------------------------------------------- */
-public Action:OnTouchHoop(entity, other)
-{
-	new client = other;
-	
-	if(!IsValidClient(client))
-		return;
-	
-	new arena_index = g_iPlayerArena[client];
-	new fraglimit = g_iArenaFraglimit[arena_index];
-	new client_slot = g_iPlayerSlot[client];
-	new foe_slot = (client_slot==SLOT_ONE) ? SLOT_TWO : SLOT_ONE;
-	new foe = g_iArenaQueue[arena_index][foe_slot];
-	
-	if(!IsValidClient(foe) || !g_bArenaBBall[arena_index])
-		return;
-	
-	if(entity == g_iBBallHoop[arena_index][foe_slot] && g_bPlayerHasIntel[client])
-	{
-		// Remove the particle effect attached to the player carrying the intel.
-		RemoveClientParticle(client);
-		
-		new String:foe_name[MAX_NAME_LENGTH];
-		GetClientName(foe, foe_name, sizeof(foe_name));
-		new String:client_name[MAX_NAME_LENGTH];
-		GetClientName(client, client_name, sizeof(client_name));
-		
-		CPrintToChat(client, "%t", "bballdunk", foe_name);
-		
-		g_bPlayerHasIntel[client] = false;
-		g_iArenaScore[arena_index][client_slot] += 1;
-		
-		if (fraglimit>0 && g_iArenaScore[arena_index][client_slot] >= fraglimit && g_iArenaStatus[arena_index] >= AS_FIGHT && g_iArenaStatus[arena_index] < AS_REPORTED)
-		{
-			g_iArenaStatus[arena_index] = AS_REPORTED;
-			GetClientName(client,client_name, sizeof(client_name));
-			CPrintToChatAll("%t","XdefeatsY", client_name, g_iArenaScore[arena_index][client_slot], foe_name, g_iArenaScore[arena_index][foe_slot], fraglimit, g_sArenaName[arena_index]);
-			
-			if (!g_bNoStats)
-				CalcELO(client,foe);
-			
-			if(IsValidEdict(g_iBBallIntel[arena_index]) && g_iBBallIntel[arena_index] > -1)
-			{
-				SDKUnhook(g_iBBallIntel[arena_index], SDKHook_StartTouch, OnTouchIntel);
-				RemoveEdict(g_iBBallIntel[arena_index]);
-				g_iBBallIntel[arena_index] = -1;
-			}
-			
-			if (g_iArenaQueue[arena_index][SLOT_TWO+1])
-			{
-				RemoveFromQueue(foe,false);
-				AddInQueue(foe,arena_index,false);
-			} else {
-				CreateTimer(3.0,Timer_StartDuel,arena_index);
-			}
-		} else {
-			ResetPlayer(client);
-			ResetPlayer(foe);
-			CreateTimer(0.15, Timer_ResetIntel, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
-		}
-		
-		ShowPlayerHud(client); 
-		ShowPlayerHud(foe);
-		EmitSoundToClient(client, "vo/intel_teamcaptured.wav");
-		EmitSoundToClient(foe, "vo/intel_enemycaptured.wav");
-		ShowSpecHudToArena(arena_index);
-	}
-}
-
-/* OnTouchIntel(entity, other)
-*
-* When the intel is touched by a player in BBall.
-* -------------------------------------------------------------------------- */
-public Action:OnTouchIntel(entity, other)
-{
-	new client = other;
-	
-	if(!IsValidClient(client))
-		return;
-	
-	new arena_index = g_iPlayerArena[client];
-	g_bPlayerHasIntel[client] = true;
-	new String:msg[64];
-	Format(msg,sizeof(msg),"You have the intel!");
-	PrintCenterText(client,msg);
-	
-	if(entity == g_iBBallIntel[arena_index] && IsValidEdict(g_iBBallIntel[arena_index]) && g_iBBallIntel[arena_index] > 0)
-	{
-		SDKUnhook(g_iBBallIntel[arena_index], SDKHook_StartTouch, OnTouchIntel);
-		RemoveEdict(g_iBBallIntel[arena_index]);
-		g_iBBallIntel[arena_index] = -1;
-	}
-	
-	new particle;
-	new TFTeam:team = TFTeam:GetEntProp(client, Prop_Send, "m_iTeamNum");
-	
-	// Create a fancy lightning effect to make it abundantly clear that the intel has just been picked up.
-	if (team==TFTeam_Red)
-		AttachParticle(client,"teleported_red",particle);
-	else
-		AttachParticle(client,"teleported_blue",particle);
-	
-	// Attach a team-colored particle to give a visual cue that a player is holding the intel, since we can't attach models.
-	particle = EntRefToEntIndex(g_iClientParticle[client]);
-	if (particle==0 || !IsValidEntity(particle))	
-	{
-		if (team==TFTeam_Red)
-			AttachParticle(client,g_sBBallParticleRed,particle);
-		else
-			AttachParticle(client,g_sBBallParticleBlue,particle);
-		
-		g_iClientParticle[client] = EntIndexToEntRef(particle);
-	}
-	
-	ShowPlayerHud(client);
-	EmitSoundToClient(client, "vo/intel_teamstolen.wav", _, _, _, _, 1.0);
-	
-	new foe = g_iArenaQueue[g_iPlayerArena[client]][g_iPlayerSlot[client]==SLOT_ONE ? SLOT_TWO : SLOT_ONE];
-	if(IsValidClient(foe))
-	{
-		EmitSoundToClient(foe, "vo/intel_enemystolen.wav");
-		ShowPlayerHud(foe);
-	}
-}
 
 /*
 ** -------------------------------------------------------------------------------
@@ -874,38 +648,18 @@ ShowPlayerHud(client)
 	if(!g_bShowHud[client])
 		return;
 	
-	if(g_bArenaBBall[arena_index])
-	{
-		if(g_iArenaStatus[arena_index] == AS_FIGHT)
-		{
-			if(g_bPlayerHasIntel[client])
-				ShowSyncHudText(client, hm_HP, "You have the intel!", g_iPlayerHP[client]);
-			else if(g_bPlayerHasIntel[client_foe])
-				ShowSyncHudText(client, hm_HP, "Enemy has the intel!", g_iPlayerHP[client]);
-			else
-				ShowSyncHudText(client, hm_HP, "Get the intel!", g_iPlayerHP[client]);
-		} else {
-			ShowSyncHudText(client, hm_HP, "", g_iPlayerHP[client]);
-		}
-	}
 		
 	// Score
 	SetHudTextParams(0.01, 0.01, HUDFADEOUTTIME, 255,255,255,255);
 	new String:report[128];
 	new fraglimit = g_iArenaFraglimit[arena_index];
 	
-	if(g_bArenaBBall[arena_index])
-	{
-		if (fraglimit>0)
-			Format(report,sizeof(report),"Arena %s. Capture Limit(%d)",g_sArenaName[arena_index],fraglimit);
-		else
-			Format(report,sizeof(report),"Arena %s. No Capture Limit",g_sArenaName[arena_index]);
-	} else {
-		if (fraglimit>0)
+
+	if (fraglimit>0)
 			Format(report,sizeof(report),"Arena %s. Frag Limit(%d)",g_sArenaName[arena_index],fraglimit);
-		else
-			Format(report,sizeof(report),"Arena %s. No Frag Limit",g_sArenaName[arena_index]);
-	}
+	else
+			Format(report,sizeof(report),"Arena %s. No Frag Limit",g_sArenaName[arena_index]);	
+	
 	
 	new red_f1 = g_iArenaQueue[arena_index][SLOT_ONE];
 	new blu_f1 = g_iArenaQueue[arena_index][SLOT_TWO];
@@ -1038,7 +792,6 @@ HideHud(client)
 	
 	ClearSyncHud(client,hm_Score);
 	ClearSyncHud(client,hm_HP);
-	ClearSyncHud(client,hm_Airshot);
 	ClearSyncHud(client,hm_Accuracy);
 }
 
@@ -1260,20 +1013,20 @@ CalcELO(winner, loser)
 			if(g_bUseSQLite)
 			{
 				// match stats
-				Format(query, sizeof(query), "	INSERT INTO mgemod_weapons VALUES ('%s', %i, '%s', %i, %i, %f, %i, %i, %i)", 
-												g_sPlayerSteamID[winner], time, g_sWeaponName[i], g_iPlayerHitCount[winner][i], g_iPlayerShotCount[winner][i], accuracy, g_iPlayerDamageDealt[winner][i], g_iPlayerDirectHitCount[winner][i], g_iPlayerAirshotCount[winner][i]);
+				Format(query, sizeof(query), "	INSERT INTO mgemod_weapons VALUES ('%s', %i, '%s', %i, %i, %f, %i)", 
+												g_sPlayerSteamID[winner], time, g_sWeaponName[i], g_iPlayerHitCount[winner][i], g_iPlayerShotCount[winner][i], accuracy, g_iPlayerDamageDealt[winner][i]);
 				SQL_TQuery(db, SQLErrorCheckCallback, query);
 				
 				// career stats not supported for SQLite
 			} else {
 				// match stats
-				Format(query, sizeof(query), 	"INSERT INTO mgemod_weapons (steamid, gametime, weapon, hits, shots, accuracy, damage, directs, airshots) VALUES ('%s', %i, '%s', %i, %i, %f, %i, %i, %i)", 
-												g_sPlayerSteamID[winner], time, g_sWeaponName[i], g_iPlayerHitCount[winner][i], g_iPlayerShotCount[winner][i], accuracy, g_iPlayerDamageDealt[winner][i], g_iPlayerDirectHitCount[winner][i], g_iPlayerAirshotCount[winner][i]);
+				Format(query, sizeof(query), 	"INSERT INTO mgemod_weapons (steamid, gametime, weapon, hits, shots, accuracy, damage) VALUES ('%s', %i, '%s', %i, %i, %f, %i)", 
+												g_sPlayerSteamID[winner], time, g_sWeaponName[i], g_iPlayerHitCount[winner][i], g_iPlayerShotCount[winner][i], accuracy, g_iPlayerDamageDealt[winner][i]);
 				SQL_TQuery(db, SQLErrorCheckCallback, query);
 				
 				// career stats
-				Format(query, sizeof(query), 	"INSERT INTO mgemod_career_weapons (steamid, weapon, hits, shots, damage, directs, airshots) VALUES ('%s', '%s', %i, %i, %i, %i, %i) ON DUPLICATE KEY UPDATE hits=hits+%i, shots=shots+%i, damage=damage+%i, directs=directs+%i, airshots=airshots+%i", 
-												g_sPlayerSteamID[winner], g_sWeaponName[i], g_iPlayerHitCount[winner][i], g_iPlayerShotCount[winner][i], g_iPlayerDamageDealt[winner][i], g_iPlayerDirectHitCount[winner][i], g_iPlayerAirshotCount[winner][i], g_iPlayerHitCount[winner][i], g_iPlayerShotCount[winner][i], g_iPlayerDamageDealt[winner][i], g_iPlayerDirectHitCount[winner][i], g_iPlayerAirshotCount[winner][i]);
+				Format(query, sizeof(query), 	"INSERT INTO mgemod_career_weapons (steamid, weapon, hits, shots, damage) VALUES ('%s', '%s', %i, %i, %i) ON DUPLICATE KEY UPDATE hits=hits+%i, shots=shots+%i, damage=damage+%i", 
+												g_sPlayerSteamID[winner], g_sWeaponName[i], g_iPlayerHitCount[winner][i], g_iPlayerShotCount[winner][i], g_iPlayerDamageDealt[winner][i], g_iPlayerHitCount[winner][i], g_iPlayerShotCount[winner][i], g_iPlayerDamageDealt[winner][i]]);
 				SQL_TQuery(db, SQLErrorCheckCallback, query);
 			}
 		}
@@ -1293,20 +1046,20 @@ CalcELO(winner, loser)
 			if(g_bUseSQLite)
 			{
 				// match stats
-				Format(query, sizeof(query), "	INSERT INTO mgemod_weapons VALUES ('%s', %i, '%s', %i, %i, %f, %i, %i, %i)", 
-												g_sPlayerSteamID[loser], time, g_sWeaponName[i], g_iPlayerHitCount[loser][i], g_iPlayerShotCount[loser][i], accuracy, g_iPlayerDamageDealt[loser][i], g_iPlayerDirectHitCount[loser][i], g_iPlayerAirshotCount[loser][i]);
+				Format(query, sizeof(query), "	INSERT INTO mgemod_weapons VALUES ('%s', %i, '%s', %i, %i, %f, %i)", 
+												g_sPlayerSteamID[loser], time, g_sWeaponName[i], g_iPlayerHitCount[loser][i], g_iPlayerShotCount[loser][i], accuracy, g_iPlayerDamageDealt[loser][i]);
 				SQL_TQuery(db, SQLErrorCheckCallback, query);
 				
 				// career stats not supported for SQLite
 			} else {
 				// match stats
-				Format(query, sizeof(query), 	"INSERT INTO mgemod_weapons (steamid, gametime, weapon, hits, shots, accuracy, damage, directs, airshots) VALUES ('%s', %i, '%s', %i, %i, %f, %i, %i, %i)", 
-												g_sPlayerSteamID[loser], time, g_sWeaponName[i], g_iPlayerHitCount[loser][i], g_iPlayerShotCount[loser][i], accuracy, g_iPlayerDamageDealt[loser][i], g_iPlayerDirectHitCount[loser][i], g_iPlayerAirshotCount[loser][i]);
+				Format(query, sizeof(query), 	"INSERT INTO mgemod_weapons (steamid, gametime, weapon, hits, shots, accuracy, damage) VALUES ('%s', %i, '%s', %i, %i, %f, %i)", 
+												g_sPlayerSteamID[loser], time, g_sWeaponName[i], g_iPlayerHitCount[loser][i], g_iPlayerShotCount[loser][i], accuracy, g_iPlayerDamageDealt[loser][i]);
 				SQL_TQuery(db, SQLErrorCheckCallback, query);
 				
 				// career stats
-				Format(query, sizeof(query), 	"INSERT INTO mgemod_career_weapons (steamid, weapon, hits, shots, damage, directs, airshots) VALUES ('%s', '%s', %i, %i, %i, %i, %i) ON DUPLICATE KEY UPDATE hits=hits+%i, shots=shots+%i, damage=damage+%i, directs=directs+%i, airshots=airshots+%i", 
-												g_sPlayerSteamID[loser], g_sWeaponName[i], g_iPlayerHitCount[loser][i], g_iPlayerShotCount[loser][i], g_iPlayerDamageDealt[loser][i], g_iPlayerDirectHitCount[loser][i], g_iPlayerAirshotCount[loser][i], g_iPlayerHitCount[loser][i], g_iPlayerShotCount[loser][i], g_iPlayerDamageDealt[loser][i], g_iPlayerDirectHitCount[loser][i], g_iPlayerAirshotCount[loser][i]);
+				Format(query, sizeof(query), 	"INSERT INTO mgemod_career_weapons (steamid, weapon, hits, shots, damage) VALUES ('%s', '%s', %i, %i, %i) ON DUPLICATE KEY UPDATE hits=hits+%i, shots=shots+%i, damage=damage+%i", 
+												g_sPlayerSteamID[loser], g_sWeaponName[i], g_iPlayerHitCount[loser][i], g_iPlayerShotCount[loser][i], g_iPlayerDamageDealt[loser][i], g_iPlayerHitCount[loser][i], g_iPlayerShotCount[loser][i], g_iPlayerDamageDealt[loser][i]);
 				SQL_TQuery(db, SQLErrorCheckCallback, query);
 			}
 		}
@@ -1344,7 +1097,7 @@ AddHit(attacker, damage)
 	#endif
 }
 
-//to detect shots, check wether the ammo of a player decreased 
+//to detect shots, check whether the ammo of a player decreased 
 DetectShot(client)
 {
 	if(g_bNoStats || HasSwitchedWeapons(client) || g_iPlayerWeaponIndex[client] == -1) 
@@ -1375,7 +1128,7 @@ DetectShot(client)
 	g_iPreviousAmmo[client] = curAmmo;
 }
 
-//detect wether client switched weapons and reset g_iPreviousAmmo count in case
+//detect whether client switched weapons and reset g_iPreviousAmmo count in case
 bool:HasSwitchedWeapons(client)
 {
 	new activeWeapon = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
@@ -1520,24 +1273,14 @@ LoadSpawnPoints()
 							g_iArenaFraglimit[g_iArenaCount] = KvGetNum(kv, "fraglimit", g_iDefaultFragLimit);
 							g_iArenaMinRating[g_iArenaCount] = KvGetNum(kv, "minrating", -1);
 							g_iArenaMaxRating[g_iArenaCount] = KvGetNum(kv, "maxrating", -1);
-							g_bArenaMidair[g_iArenaCount] = KvGetNum(kv, "midair", 0) ? true : false ;
 							g_iArenaCdTime[g_iArenaCount] = KvGetNum(kv, "cdtime", DEFAULT_CDTIME);
 							g_bArenaMGE[g_iArenaCount] = KvGetNum(kv, "mge", 0) ? true : false ;
 							g_fArenaHPRatio[g_iArenaCount] = KvGetFloat(kv, "hpratio", 1.5);
-							g_bArenaEndif[g_iArenaCount] = KvGetNum(kv, "endif", 0) ? true : false ;
-							g_bArenaBBall[g_iArenaCount] = KvGetNum(kv, "bball", 0) ? true : false ;
-							g_bVisibleHoops[g_iArenaCount] = KvGetNum(kv, "vishoop", 0) ? true : false ;
 							g_iArenaEarlyLeave[g_iArenaCount] = KvGetNum(kv, "earlyleave", 0);
 							g_bArenaInfAmmo[g_iArenaCount] = KvGetNum(kv, "infammo", 1) ? true : false ;
 							g_bArenaShowHPToPlayers[g_iArenaCount] = KvGetNum(kv, "showhp", 1) ? true : false ;
 							g_fArenaMinSpawnDist[g_iArenaCount] = KvGetFloat(kv, "mindist", 100.0);
 							g_fArenaRespawnTime[g_iArenaCount] = KvGetFloat(kv, "respawntime", 0.1);
-							g_bArenaAmmomod[g_iArenaCount] = KvGetNum(kv, "ammomod", 0) ? true : false ;
-							//parsing allowed classes for current arena
-							decl String:sAllowedClasses[128];
-							KvGetString(kv, "classes", sAllowedClasses, sizeof(sAllowedClasses));
-							LogMessage("%s classes: <%s>", g_sArenaName[g_iArenaCount], sAllowedClasses);
-							ParseAllowedClasses(sAllowedClasses,g_tfctArenaAllowedClasses[g_iArenaCount]); 
 						} while (KvGotoNextKey(kv));
 					}
 					break;
@@ -1624,28 +1367,20 @@ ResetPlayer(client)
 	if (player_slot - team != SLOT_ONE - TEAM_RED)
 		ChangeClientTeam(client, player_slot + TEAM_RED - SLOT_ONE);
 	
-	new TFClassType:class;
-	class = g_tfctPlayerClass[client] ? g_tfctPlayerClass[client] : TFClass_Soldier;
 
-	if (!IsPlayerAlive(client) || g_bArenaBBall[arena_index])
+	//TODO respawn
+	if (!IsPlayerAlive(client))
 	{
-		if (class != TF2_GetPlayerClass(client)) 
-			TF2_SetPlayerClass(client,class);
-		
-		TF2_RespawnPlayer(client);
+		//TF2_RespawnPlayer(client);
 	} else {
-		TF2_RegeneratePlayer(client);
-		ExtinguishEntity(client);
+		//TF2_RegeneratePlayer(client);
+		//ExtinguishEntity(client);
 	}
 	
 	g_iPlayerMaxHP[client] = GetEntProp(client, Prop_Data, "m_iMaxHealth");
-	
-	if (g_bArenaMidair[arena_index])
-		g_iPlayerHP[client] = g_iMidairHP;
-	else
-		g_iPlayerHP[client] = g_iPlayerHandicap[client] ? g_iPlayerHandicap[client] : RoundToNearest(float(g_iPlayerMaxHP[client])*g_fArenaHPRatio[arena_index]);
+	g_iPlayerHP[client] = g_iPlayerHandicap[client] ? g_iPlayerHandicap[client] : RoundToNearest(float(g_iPlayerMaxHP[client])*g_fArenaHPRatio[arena_index]);
 		
-	if (g_bArenaMGE[arena_index] || g_bArenaBBall[arena_index])
+	if (g_bArenaMGE[arena_index])
 		SetEntProp(client, Prop_Data, "m_iHealth", g_iPlayerHandicap[client] ? g_iPlayerHandicap[client] : RoundToNearest(float(g_iPlayerMaxHP[client])*g_fArenaHPRatio[arena_index]));
 	
 	ShowPlayerHud(client);
@@ -1655,6 +1390,7 @@ ResetPlayer(client)
 	return 1;
 }
 
+//TODO: investigate if this works at all
 ResetClientAmmoCounts(client)
 {
 	// Crutch.
@@ -1666,133 +1402,6 @@ ResetClientAmmoCounts(client)
 		g_iPlayerClip[client][SLOT_ONE] = GetEntProp(GetPlayerWeaponSlot(client, 0), Prop_Data, "m_iClip1");
 	if(IsValidEntity(GetPlayerWeaponSlot(client, 1)))
 		g_iPlayerClip[client][SLOT_TWO] = GetEntProp(GetPlayerWeaponSlot(client, 1), Prop_Data, "m_iClip1");
-}
-
-ResetIntel(arena_index, any:client = -1)
-{
-	if(g_bArenaBBall[arena_index])
-	{
-		if(IsValidEdict(g_iBBallIntel[arena_index]) && g_iBBallIntel[arena_index] > 0)
-		{
-			SDKUnhook(g_iBBallIntel[arena_index], SDKHook_StartTouch, OnTouchIntel);
-			RemoveEdict(g_iBBallIntel[arena_index]);
-			g_iBBallIntel[arena_index] = -1;
-		}
-		
-		if (g_iBBallIntel[arena_index] == -1)
-			g_iBBallIntel[arena_index] = CreateEntityByName("item_ammopack_small");
-		else
-			LogError("[%s] Intel [%i] already exists.", g_sArenaName[arena_index], g_iBBallIntel[arena_index]);
-
-		
-		new Float:intel_loc[3];
-		
-		if(client != -1)
-		{
-			new client_slot = g_iPlayerSlot[client];
-			g_bPlayerHasIntel[client] = false;
-			
-			if(client_slot == SLOT_ONE)
-			{
-				intel_loc[0] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index]-3][0];
-				intel_loc[1] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index]-3][1];
-				intel_loc[2] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index]-3][2];
-			} else if(client_slot == SLOT_TWO) {
-				intel_loc[0] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index]-2][0];
-				intel_loc[1] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index]-2][1];
-				intel_loc[2] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index]-2][2];
-			}
-		} else {	
-			intel_loc[0] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index]-4][0];
-			intel_loc[1] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index]-4][1];
-			intel_loc[2] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index]-4][2];
-		}
-		
-		DispatchSpawn(g_iBBallIntel[arena_index]);
-		TeleportEntity(g_iBBallIntel[arena_index], intel_loc, NULL_VECTOR, NULL_VECTOR);
-		SetEntProp(g_iBBallIntel[arena_index], Prop_Send, "m_iTeamNum", 1, 4);
-		SetEntityModel(g_iBBallIntel[arena_index], MODEL_BRIEFCASE);
-		SDKUnhook(g_iBBallIntel[arena_index], SDKHook_StartTouch, OnTouchIntel);
-		SDKHook(g_iBBallIntel[arena_index], SDKHook_StartTouch, OnTouchIntel);
-		AcceptEntityInput(g_iBBallIntel[arena_index], "Enable");
-	}
-}
-
-SetPlayerToAllowedClass(client, arena_index)
-{// If a player's class isn't allowed, set it to one that is.
-	if (g_tfctPlayerClass[client]==TFClassType:0 || !g_tfctArenaAllowedClasses[arena_index][g_tfctPlayerClass[client]])
-	{
-		for(new i=1;i<=9;i++)
-		{
-			if (g_tfctArenaAllowedClasses[arena_index][i])
-			{
-				g_tfctPlayerClass[client] = TFClassType:i;
-				break;
-			}
-		}
-	}
-}
-
-ParseAllowedClasses(const String:sList[],output[TFClassType])
-{
-	new count, String:a_class[9][9];
-	
-	if (strlen(sList)>0)
-	{
-		count = ExplodeString(sList, " ", a_class, 9, 9);
-	} else {
-		decl String:sDefList[128];
-		GetConVarString(gcvar_allowedClasses,sDefList,sizeof(sDefList));
-		count = ExplodeString(sDefList, " ", a_class, 9, 9);
-	}
-	
-	for (new i=1;i<=9;i++)
-		output[i] = 0;
-	
-	for (new i=0;i<count;i++)
-	{
-		new TFClassType:c = TF2_GetClass(a_class[i]); 
-		
-		if (c) 
-			output[c] = 1;
-	}
-}
-
-// Particles ------------------------------------------------------------------
-
-AttachParticle(ent, String:particleType[],&particle) // Particle code borrowed from "The Amplifier" and "Presents!".
-{
-	particle = CreateEntityByName("info_particle_system");
-	
-	decl Float:pos[3];
-
-	// Get position of entity
-	GetEntPropVector(ent, Prop_Send, "m_vecOrigin", pos);
-
-	// Teleport, set up
-	TeleportEntity(particle, pos, NULL_VECTOR, NULL_VECTOR);
-	DispatchKeyValue(particle, "effect_name", particleType);
-	
-	SetVariantString("!activator");
-	AcceptEntityInput(particle, "SetParent", ent, particle, 0);
-		
-	// All entities in presents are given a targetname to make clean up easier
-	DispatchKeyValue(particle, "targetname", "tf2particle");
-
-	// Spawn and start
-	DispatchSpawn(particle);
-	ActivateEntity(particle);
-	AcceptEntityInput(particle, "Start");
-}
-
-RemoveClientParticle(client)
-{
-	new particle = EntRefToEntIndex(g_iClientParticle[client]);
-	
-	if (particle != 0 && IsValidEntity(particle))
-		RemoveEdict(particle);
-	
-	g_iClientParticle[client]=0;
 }
 
 // ====[ MAIN MENU ]====================================================
@@ -1994,26 +1603,6 @@ public Menu_Top5(Handle:menu, MenuAction:action, param1, param2)
 		}
     }
 }
-// ====[ ENDIF ]====================================================
-public Action:BoostVectors(Handle:timer, any:userid)
-{
-	new client = GetClientOfUserId(userid);
-	new Float:vecClient[3];
-	new Float:vecBoost[3];
-	
-	GetEntPropVector(client, Prop_Data, "m_vecVelocity", vecClient);
-	
-	vecBoost[0] = vecClient[0] * g_fRocketForceX;
-	vecBoost[1] = vecClient[1] * g_fRocketForceY;
-	if(vecClient[2] > 0)
-	{
-		vecBoost[2] = vecClient[2] * g_fRocketForceZ;
-	} else {
-		vecBoost[2] = vecClient[2];
-	}
-	
-	TeleportEntity(client, NULL_VECTOR, NULL_VECTOR, vecBoost);
-}
 
 // ====[ CVARS ]====================================================
 public handler_ConVarChange(Handle:convar, const String:oldValue[], const String:newValue[])
@@ -2027,24 +1616,8 @@ public handler_ConVarChange(Handle:convar, const String:oldValue[], const String
 	}
 	else if (convar == gcvar_fragLimit)
 		g_iDefaultFragLimit = StringToInt(newValue);
-	else if (convar == gcvar_airshotHeight)
-		g_iAirshotHeight = StringToInt(newValue);
-	else if (convar == gcvar_midairHP)
-		g_iMidairHP = StringToInt(newValue);
-	else if (convar == gcvar_RocketForceX)
-		g_fRocketForceX = StringToFloat(newValue);
-	else if (convar == gcvar_RocketForceY)
-		g_fRocketForceY = StringToFloat(newValue);
-	else if (convar == gcvar_RocketForceZ)
-		g_fRocketForceZ = StringToFloat(newValue);
 	else if (convar == gcvar_autoCvar)
 		StringToInt(newValue) ? (g_bAutoCvar = true) : (g_bAutoCvar = false);
-	else if (convar == gcvar_bballParticle_red)
-		strcopy(g_sBBallParticleRed, sizeof(g_sBBallParticleRed), newValue);
-	else if (convar == gcvar_bballParticle_blue)
-		strcopy(g_sBBallParticleBlue, sizeof(g_sBBallParticleBlue), newValue);
-	else if (convar == gcvar_meatshotPercent)
-		g_fMeatshotPercent = StringToFloat(newValue);
 	else if (convar == gcvar_noDisplayRating)
 		StringToInt(newValue) ? (g_bNoDisplayRating = true) : (g_bNoDisplayRating = false);
 	else if (convar == gcvar_stats)
@@ -2132,115 +1705,6 @@ public Action:Command_Remove(client, args)
 	return Plugin_Handled;
 }
 
-public Action:Command_JoinClass(client, args)
-{
-	if (!IsValidClient(client))
-		return Plugin_Continue;
-	
-	if (args)
-	{
-		new arena_index = g_iPlayerArena[client];
-		
-		new String:s_class[64];
-		GetCmdArg(1, s_class, sizeof(s_class));
-		new TFClassType:new_class = TF2_GetClass(s_class);
-		
-		// Work-around to enable heavy. See https://bugs.alliedmods.net/show_bug.cgi?id=5243
-		if (!new_class && StrEqual(s_class, "heavyweapons") && g_tfctArenaAllowedClasses[arena_index][6] == 1)
-			new_class = TFClass_Heavy;
-		
-		if (new_class == g_tfctPlayerClass[client])
-			return Plugin_Handled; // no need to do anything, as nothing has changed
-		
-		if (arena_index == 0) // if client is on arena
-		{
-			if (!g_tfctClassAllowed[new_class]) // checking global class restrctions
-			{ 
-				CPrintToChat(client,"%t","ClassIsNotAllowed");
-				return Plugin_Handled;
-			} else {
-				TF2_SetPlayerClass(client, new_class);
-				g_tfctPlayerClass[client] = new_class;
-				ChangeClientTeam(client,TEAM_SPEC);
-				ShowSpecHudToArena(g_iPlayerArena[client]);
-			}
-		} else {
-			if (!g_tfctArenaAllowedClasses[arena_index][new_class])
-			{
-				CPrintToChat(client,"%t","ClassIsNotAllowed");
-				return Plugin_Handled;
-			}
-			
-			if (g_iPlayerSlot[client]==SLOT_ONE || g_iPlayerSlot[client]==SLOT_TWO)
-			{
-				if (g_iArenaStatus[arena_index] != AS_FIGHT || g_bArenaMGE[arena_index] || g_bArenaEndif[arena_index])
-				{
-					TF2_SetPlayerClass(client, new_class);
-					g_tfctPlayerClass[client] = new_class;
-					
-					if(g_iArenaStatus[arena_index] == AS_FIGHT && g_bArenaMGE[arena_index] || g_bArenaEndif[arena_index])
-					{
-						new killer_slot = (g_iPlayerSlot[client]==SLOT_ONE) ? SLOT_TWO : SLOT_ONE;
-						new fraglimit = g_iArenaFraglimit[arena_index];
-						new killer = g_iArenaQueue[arena_index][killer_slot];
-						
-						if(g_iArenaStatus[arena_index] == AS_FIGHT && killer)
-						{
-							g_iArenaScore[arena_index][killer_slot] += 1;
-							CPrintToChat(killer,"%t","ClassChangePointOpponent");	
-							CPrintToChat(client,"%t","ClassChangePoint");
-						}
-						
-						ShowPlayerHud(client);
-						
-						if(IsValidClient(killer))
-						{
-							TF2_RegeneratePlayer(killer);
-							new raised_hp = RoundToNearest(float(g_iPlayerMaxHP[killer])*g_fArenaHPRatio[arena_index]);
-							g_iPlayerHP[killer] = raised_hp;
-							SetEntProp(killer, Prop_Data, "m_iHealth", raised_hp);
-							ShowPlayerHud(killer);
-						}
-						
-						if (g_iArenaStatus[arena_index] == AS_FIGHT && fraglimit>0 && g_iArenaScore[arena_index][killer_slot] >= fraglimit)
-						{
-							new String:killer_name[MAX_NAME_LENGTH];
-							new String:victim_name[MAX_NAME_LENGTH];
-							GetClientName(killer,killer_name, sizeof(killer_name));
-							GetClientName(client,victim_name, sizeof(victim_name));
-							CPrintToChatAll("%t","XdefeatsY", killer_name, g_iArenaScore[arena_index][killer_slot], victim_name, g_iArenaScore[arena_index][g_iPlayerSlot[client]], fraglimit, g_sArenaName[arena_index]);
-							
-							g_iArenaStatus[arena_index] = AS_REPORTED;
-							
-							if (!g_bNoStats /* && !g_arenaNoStats[arena_index]*/)
-								CalcELO(killer,client);
-								
-							if (g_iArenaQueue[arena_index][SLOT_TWO+1])
-							{
-								RemoveFromQueue(client,false);
-								AddInQueue(client,arena_index,false);
-							} else {
-								CreateTimer(3.0,Timer_StartDuel,arena_index);
-							}
-						}
-					}
-					
-					CreateTimer(0.1,Timer_ResetPlayer,GetClientUserId(client));
-					ShowSpecHudToArena(g_iPlayerArena[client]);
-					return Plugin_Continue;
-				} else {
-					CPrintToChat(client, "%t", "NoClassChange");
-					return Plugin_Handled;
-				}
-			} else {
-				g_tfctPlayerClass[client] = new_class;
-				ChangeClientTeam(client,TEAM_SPEC);
-			}
-		}
-	}
-	
-	return Plugin_Handled;
-}
 
 public Action:Command_Spec(client, args)
 { //detecting spectator target
@@ -2261,7 +1725,8 @@ public Action:Command_AddBot(client, args)
 	
 	if (arena_index && (player_slot==SLOT_ONE || player_slot==SLOT_TWO))
 	{
-		ServerCommand("tf_bot_add");
+		//TODO convert
+		//ServerCommand("tf_bot_add");
 		g_bPlayerAskedForBot[client] = true;
 	}
 	return Plugin_Handled;
@@ -2380,7 +1845,8 @@ public Action:Command_Help(client, args)
 	PrintToConsole(client, "%t", "Cmd_Rank");
 	PrintToConsole(client, "%t", "Cmd_HitBlip");
 	PrintToConsole(client, "%t", "Cmd_Hud");
-	PrintToConsole(client, "%t", "Cmd_Handicap");
+	//TODO uncomment once that command works
+	//PrintToConsole(client, "%t", "Cmd_Handicap");
 	PrintToConsole(client, "----------------------------\n\n");
 	
 	return Plugin_Handled;
@@ -2428,77 +1894,79 @@ public Action:Command_First(client, args)
 	return Plugin_Handled;
 }
 
-public Action:Command_Handicap(client, args)
-{
-	if (!IsValidClient(client))
-		return Plugin_Continue;
+//TODO see if any of this shit works
+// public Action:Command_Handicap(client, args)
+// {
+	// if (!IsValidClient(client))
+		// return Plugin_Continue;
 	
-	new arena_index = g_iPlayerArena[client];
+	// new arena_index = g_iPlayerArena[client];
 	
-	if (!arena_index || g_bArenaMidair[arena_index])
-	{
-		CPrintToChat(client, "%t", "MustJoinArena");
-		g_iPlayerHandicap[client] = 0;
-		return Plugin_Handled;
-	}
+	// if (!arena_index || g_bArenaMidair[arena_index])
+	// {
+		// CPrintToChat(client, "%t", "MustJoinArena");
+		// g_iPlayerHandicap[client] = 0;
+		// return Plugin_Handled;
+	// }
 	
-	if(args==0)
-	{
-		if (g_iPlayerHandicap[client] == 0)
-			CPrintToChat(client, "%t","NoCurrentHandicap",g_iPlayerHandicap[client]);
-		else
-			CPrintToChat(client, "%t","CurrentHandicap",g_iPlayerHandicap[client]);
-	} else {
-		decl String:argstr[64];
-		GetCmdArgString(argstr, sizeof(argstr));
-		new argint = StringToInt(argstr);
+	// if(args==0)
+	// {
+		// if (g_iPlayerHandicap[client] == 0)
+			// CPrintToChat(client, "%t","NoCurrentHandicap",g_iPlayerHandicap[client]);
+		// else
+			// CPrintToChat(client, "%t","CurrentHandicap",g_iPlayerHandicap[client]);
+	// } else {
+		// decl String:argstr[64];
+		// GetCmdArgString(argstr, sizeof(argstr));
+		// new argint = StringToInt(argstr);
 		
-		if (StrEqual(argstr, "off", false))
-		{
-			CPrintToChat(client, "%t", "HandicapDisabled");
-			g_iPlayerHandicap[client] = 0;
-			return Plugin_Handled;
-		}
+		// if (StrEqual(argstr, "off", false))
+		// {
+			// CPrintToChat(client, "%t", "HandicapDisabled");
+			// g_iPlayerHandicap[client] = 0;
+			// return Plugin_Handled;
+		// }
 		
-		if (argint > RoundToNearest(float(g_iPlayerMaxHP[client])*g_fArenaHPRatio[arena_index]))
-		{
-			CPrintToChat(client, "%t","InvalidHandicap");
-			g_iPlayerHandicap[client] = 0;
-		} else if (argint <= 0) {
-			CPrintToChat(client, "%t","InvalidHandicap");
-		} else {
-			g_iPlayerHandicap[client] = argint;
+		// if (argint > RoundToNearest(float(g_iPlayerMaxHP[client])*g_fArenaHPRatio[arena_index]))
+		// {
+			// CPrintToChat(client, "%t","InvalidHandicap");
+			// g_iPlayerHandicap[client] = 0;
+		// } else if (argint <= 0) {
+			// CPrintToChat(client, "%t","InvalidHandicap");
+		// } else {
+			// g_iPlayerHandicap[client] = argint;
 			
-			//If the client currently has more health than their handicap allows, lower it to the proper amount.
-			if (IsPlayerAlive(client) && g_iPlayerHP[client] > g_iPlayerHandicap[client])
-			{
-				if (g_bArenaMGE[arena_index] || g_bArenaBBall[arena_index])
-				{
-					//Prevent an possible exploit where a player could restore their buff if it decayed naturally without them taking damage.
-					if (GetEntProp(client, Prop_Data, "m_iHealth") > g_iPlayerHandicap[client])
-					{
-						SetEntProp(client, Prop_Data, "m_iHealth", g_iPlayerHandicap[client]);
-						g_iPlayerHP[client] = g_iPlayerHandicap[client];
-					}
-				} else {
-					g_iPlayerHP[client] = g_iPlayerHandicap[client];
-				}
+			// //If the client currently has more health than their handicap allows, lower it to the proper amount.
+			// if (IsPlayerAlive(client) && g_iPlayerHP[client] > g_iPlayerHandicap[client])
+			// {
+				// if (g_bArenaMGE[arena_index] || g_bArenaBBall[arena_index])
+				// {
+					// //Prevent an possible exploit where a player could restore their buff if it decayed naturally without them taking damage.
+					// if (GetEntProp(client, Prop_Data, "m_iHealth") > g_iPlayerHandicap[client])
+					// {
+						// SetEntProp(client, Prop_Data, "m_iHealth", g_iPlayerHandicap[client]);
+						// g_iPlayerHP[client] = g_iPlayerHandicap[client];
+					// }
+				// } else {
+					// g_iPlayerHP[client] = g_iPlayerHandicap[client];
+				// }
 				
-				//Update overlay huds to reflect health change.
-				new player_slot = g_iPlayerSlot[client],
-					foe_slot = player_slot==SLOT_ONE ? SLOT_TWO : SLOT_ONE,
-					foe = g_iArenaQueue[arena_index][foe_slot];
-				ShowPlayerHud(client);
-				ShowPlayerHud(foe);
-				ShowSpecHudToArena(g_iPlayerArena[client]);
-			}
-		}
-	}
+				// //Update overlay huds to reflect health change.
+				// new player_slot = g_iPlayerSlot[client],
+					// foe_slot = player_slot==SLOT_ONE ? SLOT_TWO : SLOT_ONE,
+					// foe = g_iArenaQueue[arena_index][foe_slot];
+				// ShowPlayerHud(client);
+				// ShowPlayerHud(foe);
+				// ShowSpecHudToArena(g_iPlayerArena[client]);
+			// }
+		// }
+	// }
 	
-	return Plugin_Handled;
-}
+	// return Plugin_Handled;
+// }
 
 //blocking sounds
+//TODO see if this works
 public Action:sound_hook(clients[64], &numClients, String:sample[PLATFORM_MAX_PATH], &entity, &channel, &Float:volume, &level, &pitch, &flags)
 {	
 	if(StrContains(sample,"pl_fallpain")>=0 && g_bBlockFallDamage)
@@ -2545,8 +2013,8 @@ PrepareSQL() // Opens the connection to the database, and creates the tables if 
 		SQL_TQuery(db, SQLErrorCheckCallback, "CREATE TABLE IF NOT EXISTS mgemod_duels (winner TEXT, loser TEXT, winnerscore INTEGER, loserscore INTEGER, winlimit INTEGER, gametime INTEGER, mapname TEXT, arenaname TEXT)");
 	} else {
 		SQL_TQuery(db, SQLErrorCheckCallback, "CREATE TABLE IF NOT EXISTS mgemod_stats (rating INT(4) NOT NULL, steamid VARCHAR(32) NOT NULL, name VARCHAR(64) NOT NULL, wins INT(4) NOT NULL, losses INT(4) NOT NULL, lastplayed INT(11) NOT NULL, hitblip INT(2) NOT NULL) ENGINE = InnoDB");
-		SQL_TQuery(db, SQLErrorCheckCallback, "CREATE TABLE IF NOT EXISTS mgemod_weapons (steamid VARCHAR(32) NOT NULL, gametime INT(11) NOT NULL, weapon VARCHAR(32) NOT NULL, hits INT(4) NOT NULL, shots INT(4) NOT NULL, accuracy FLOAT(4) NOT NULL, damage INT(6) NOT NULL, directs INT(4) NOT NULL, airshots INT(4) NOT NULL) ENGINE = InnoDB");
-		SQL_TQuery(db, SQLErrorCheckCallback, "CREATE TABLE IF NOT EXISTS mgemod_career_weapons (steamid VARCHAR(32) NOT NULL, weapon VARCHAR(32) NOT NULL, hits INT(4) NOT NULL, shots INT(4) NOT NULL, damage INT(6) NOT NULL, directs INT(4) NOT NULL, airshots INT(4) NOT NULL, PRIMARY KEY (steamid, weapon)) ENGINE = InnoDB");
+		SQL_TQuery(db, SQLErrorCheckCallback, "CREATE TABLE IF NOT EXISTS mgemod_weapons (steamid VARCHAR(32) NOT NULL, gametime INT(11) NOT NULL, weapon VARCHAR(32) NOT NULL, hits INT(4) NOT NULL, shots INT(4) NOT NULL, accuracy FLOAT(4) NOT NULL, damage INT(6) NOT NULL) ENGINE = InnoDB");
+		SQL_TQuery(db, SQLErrorCheckCallback, "CREATE TABLE IF NOT EXISTS mgemod_career_weapons (steamid VARCHAR(32) NOT NULL, weapon VARCHAR(32) NOT NULL, hits INT(4) NOT NULL, shots INT(4) NOT NULL, damage INT(6) NOT NULL, PRIMARY KEY (steamid, weapon)) ENGINE = InnoDB");
 		SQL_TQuery(db, SQLErrorCheckCallback, "CREATE TABLE IF NOT EXISTS mgemod_duels (winner VARCHAR(32) NOT NULL, loser VARCHAR(32) NOT NULL, winnerscore INT(4) NOT NULL, loserscore INT(4) NOT NULL, winlimit INT(4) NOT NULL, gametime INT(11) NOT NULL, mapname VARCHAR(64) NOT NULL, arenaname VARCHAR(32) NOT NULL) ENGINE = InnoDB");
 	}
 	
@@ -2739,13 +2207,12 @@ public SQLDbConnTest(Handle:owner, Handle:hndl, const String:error[], any:data)
 ** 
 ** ------------------------------------------------------------------
 **/
-
+//TODO give weapon
 public Event_PlayerSpawn(Handle:event,const String:name[],bool:dontBroadcast)
 {
 	new client = GetClientOfUserId(GetEventInt(event, "userid"));
 	new arena_index = g_iPlayerArena[client];
 	
-	g_tfctPlayerClass[client] = TF2_GetPlayerClass(client);
 	
 	ResetClientAmmoCounts(client);
 	
@@ -2757,11 +2224,9 @@ public Event_PlayerSpawn(Handle:event,const String:name[],bool:dontBroadcast)
 		g_iPlayerHP[client] = RoundToNearest(float(g_iPlayerMaxHP[client])*g_fArenaHPRatio[arena_index]);
 		ShowSpecHudToArena(arena_index);
 	}
-	
-	if(g_bArenaBBall[arena_index])
-		g_bPlayerHasIntel[client] = false;
 }
 
+//TODO, is this the right event?
 public Event_WinPanel(Handle:event,const String:name[],bool:dontBroadcast)
 {
 	// Disable stats so people leaving at the end of the map don't lose points.
@@ -2782,92 +2247,16 @@ public Action:Event_PlayerHurt(Handle:event,const String:name[],bool:dontBroadca
 	if (attacker > 0 && victim != attacker) // If the attacker wasn't the person being hurt, or the world (fall damage).
 	{
 		AddHit(attacker, iDamage);
-		
-		new bool:shootsRocketsOrPipes = ShootsRocketsOrPipes(attacker);
-		if(g_bArenaEndif[arena_index])
-		{
-			if(shootsRocketsOrPipes)
-				CreateTimer(0.01, BoostVectors, GetClientUserId(victim));
-		}
-			
-			
-		if(g_iPlayerWeaponIndex[attacker] != -1)
-		{		
-			// Meatshot detection
-			if(g_iWeaponMaxDmg[g_iPlayerWeaponIndex[attacker]] != -1)
-			{
-				if(iDamage >= RoundToNearest(g_fMeatshotPercent * float(g_iWeaponMaxDmg[g_iPlayerWeaponIndex[attacker]])))
-					g_iPlayerDirectHitCount[attacker][g_iPlayerWeaponIndex[attacker]] += 1;
-			}
-		}
-		
-		if (g_bPlayerTakenDirectHit[victim])
-		{
-			new bool:isVictimInAir = !(GetEntityFlags(victim) & (FL_ONGROUND));
-			//increment directhit / airshot count for accuracy tracking
-			if(g_iPlayerAttackUsedWeaponIdx[attacker] != -1)
-			{
-				if (g_bWeaponProjectile[g_iPlayerAttackUsedWeaponIdx[attacker]])
-				{
-					g_iPlayerDirectHitCount[attacker][g_iPlayerAttackUsedWeaponIdx[attacker]] += 1;
-					
-					if (isVictimInAir && !g_bArenaEndif[arena_index])
-					{
-						new Float:dist = DistanceAboveGround(victim);
-						
-						if (dist >= g_iAirshotHeight)
-							g_iPlayerAirshotCount[attacker][g_iPlayerAttackUsedWeaponIdx[attacker]] += 1;
-					}
-				}	
-			}
-			
-			if (!isVictimInAir || g_bArenaMGE[arena_index])
-			{		
-				if(!g_bArenaMidair[arena_index] && g_bHitBlip[attacker])
-				{
-					new pitch = 150 - iDamage;
-					
-					if(pitch<45)
-					pitch = 45;
-				
-					EmitSoundToClient(attacker, "buttons/button17.wav", _, _, _, _, 1.0, pitch);
-				}
-			} else { //airshot
-				new Float:dist = DistanceAboveGround(victim);
-				if (dist >= g_iAirshotHeight)
-				{
-					if (g_bArenaMidair[arena_index])
-						g_iPlayerHP[victim] -= 1;
-					
-					if(g_bArenaEndif[arena_index] && dist >= 250)
-					{
-						g_iPlayerHP[victim] = -1;
-						
-						if(g_iPlayerAttackUsedWeaponIdx[attacker] != -1)
-							g_iPlayerAirshotCount[attacker][g_iPlayerAttackUsedWeaponIdx[attacker]] += 1;
-					}
-				}
-			}
-		}
 	}
 	
 	g_bPlayerTakenDirectHit[victim] = false;
 	
-	if(g_bArenaMGE[arena_index] || g_bArenaBBall[arena_index])
+	if(g_bArenaMGE[arena_index])
 		g_iPlayerHP[victim] = GetClientHealth(victim);
-	else if (g_bArenaAmmomod[arena_index])
-		g_iPlayerHP[victim] -= iDamage;
 	
 	//TODO: Look into getting rid of the crutch. Possible memory leak/performance issue?
 	g_bPlayerRestoringAmmo[attacker] = false;		//inf ammo crutch
-	
-	if(g_bArenaAmmomod[arena_index] || g_bArenaMidair[arena_index] || g_bArenaEndif[arena_index])
-	{
-		if (g_iPlayerHP[victim] <= 0)
-			SetEntityHealth(victim,0);
-		else
-			SetEntityHealth(victim,g_iPlayerMaxHP[victim]);
-	}
+
 	
 	ShowPlayerHud(victim);
 	ShowPlayerHud(attacker);
@@ -2880,8 +2269,6 @@ public Action:Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroa
 {
 	new victim = GetClientOfUserId(GetEventInt(event, "userid"));
 	new arena_index = g_iPlayerArena[victim];
-	
-	RemoveClientParticle(victim);
 	
 	if (!arena_index)
 		ChangeClientTeam(victim, TEAM_SPEC);
@@ -2903,22 +2290,6 @@ public Action:Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroa
 			return Plugin_Handled;
 	}
 	
-	if (!g_bArenaBBall[arena_index])	// Kills shouldn't give points in bball.
-		g_iArenaScore[arena_index][killer_slot] += 1;
-	
-	if(!g_bArenaEndif[arena_index])		// Endif does not need to display health, since it is one-shot kills.
-	{
-		if(IsPlayerAlive(killer))
-		{
-			if(g_bArenaMGE[arena_index] || g_bArenaBBall[arena_index])
-				CPrintToChat(victim, "%t", "HPLeft", GetClientHealth(killer));
-			else
-				CPrintToChat(victim, "%t", "HPLeft", g_iPlayerHP[killer]);
-		}
-	}
-
-	if(g_bArenaAmmomod[arena_index] || g_bArenaMidair[arena_index])	
-		g_iArenaStatus[arena_index] = AS_AFTERFIGHT;
 	
 	new fraglimit = g_iArenaFraglimit[arena_index];
 	
@@ -2949,55 +2320,29 @@ public Action:Event_PlayerDeath(Handle:event, const String:name[], bool:dontBroa
 		} else {
 			CreateTimer(3.0,Timer_StartDuel,arena_index);
 		}
-	} else if(g_bArenaAmmomod[arena_index] || g_bArenaMidair[arena_index]) {
-		CreateTimer(3.0,Timer_NewRound,arena_index);
-	} else {
-		if(g_bArenaBBall[arena_index])
+	}  
+	else 
+	{
+		//TODO, does this work?
+		if(g_bArenaMGE[arena_index] && g_iPlayerWeaponIndex[killer] != -1)
 		{
-			if (g_bPlayerHasIntel[victim])
+			if(!g_bWeaponProjectile[g_iPlayerWeaponIndex[killer]]) // Hitscan-only workaround
 			{
-				g_bPlayerHasIntel[victim] = false;
+				g_iPlayerShotCount[killer][g_iPlayerWeaponIndex[killer]] += 1;
 				
-				new Float:pos[3];
-				GetClientAbsOrigin(victim, pos);
-				pos[2] = g_fArenaSpawnOrigin[arena_index][g_iArenaSpawns[arena_index]-3][2];
-				
-				if (g_iBBallIntel[arena_index] == -1)
-					g_iBBallIntel[arena_index] = CreateEntityByName("item_ammopack_small");
-				else
-					LogError("[%s] Player died with intel, but intel [%i] already exists.", g_sArenaName[arena_index], g_iBBallIntel[arena_index]);
-				
-				TeleportEntity(g_iBBallIntel[arena_index], pos, NULL_VECTOR, NULL_VECTOR);
-				DispatchSpawn(g_iBBallIntel[arena_index]);
-				SetEntProp(g_iBBallIntel[arena_index], Prop_Send, "m_iTeamNum", 1, 4);
-				SetEntityModel(g_iBBallIntel[arena_index], MODEL_BRIEFCASE);
-				SDKUnhook(g_iBBallIntel[arena_index], SDKHook_StartTouch, OnTouchIntel);
-				SDKHook(g_iBBallIntel[arena_index], SDKHook_StartTouch, OnTouchIntel);
-				AcceptEntityInput(g_iBBallIntel[arena_index], "Enable");
-				
-				EmitSoundToClient(victim, "vo/intel_teamdropped.wav");
-				if(IsValidClient(killer))
-					EmitSoundToClient(killer, "vo/intel_enemydropped.wav");
+				#if defined DEBUG_LOG
+				if(g_iPlayerWeaponIndex[killer] >= 0)
+					PrintToChat(killer, "[MGEMod] Workaround. Name [%s]. Shot #%i", g_sWeaponName[g_iPlayerWeaponIndex[killer]], g_iPlayerShotCount[killer][g_iPlayerWeaponIndex[killer]]);
+				#endif
 			}
-		} else {
-			if(g_bArenaMGE[arena_index] && g_iPlayerWeaponIndex[killer] != -1)
-			{
-				if(!g_bWeaponProjectile[g_iPlayerWeaponIndex[killer]]) // Hitscan-only workaround
-				{
-					g_iPlayerShotCount[killer][g_iPlayerWeaponIndex[killer]] += 1;
-					
-					#if defined DEBUG_LOG
-					if(g_iPlayerWeaponIndex[killer] >= 0)
-						PrintToChat(killer, "[MGEMod] Workaround. Name [%s]. Shot #%i", g_sWeaponName[g_iPlayerWeaponIndex[killer]], g_iPlayerShotCount[killer][g_iPlayerWeaponIndex[killer]]);
-					#endif
-				}
-			}
-			
-			TF2_RegeneratePlayer(killer);
-			new raised_hp = RoundToNearest(float(g_iPlayerMaxHP[killer])*g_fArenaHPRatio[arena_index]);
-			g_iPlayerHP[killer] = raised_hp;
-			SetEntProp(killer, Prop_Data, "m_iHealth", raised_hp);
 		}
+			
+		//TODO regen the winner
+		//TF2_RegeneratePlayer(killer);
+		//new raised_hp = RoundToNearest(float(g_iPlayerMaxHP[killer])*g_fArenaHPRatio[arena_index]);
+		g_iPlayerHP[killer] = raised_hp;
+		SetEntProp(killer, Prop_Data, "m_iHealth", raised_hp);
+		
 		
 		CreateTimer(g_fArenaRespawnTime[arena_index],Timer_ResetPlayer,GetClientUserId(victim));
 	}
@@ -3032,10 +2377,6 @@ public Action:Event_PlayerTeam(Handle:event, const String:name[], bool:dontBroad
 	} else if (IsValidClient(client)) { // this code fixing spawn exploit
 		new arena_index = g_iPlayerArena[client];
 		
-		if (arena_index == 0)
-		{
-			TF2_SetPlayerClass(client,TFClassType:0);
-		}
 	}
 	
 	SetEventInt(event, "silent", true);
@@ -3044,73 +2385,9 @@ public Action:Event_PlayerTeam(Handle:event, const String:name[], bool:dontBroad
 
 public Action:Event_RoundStart(Handle:event, const String:name[], bool:dontBroadcast)
 {
+	//TODO does this work?
 	SetConVarInt(gcvar_WfP,1);//cancel waiting for players
-	
-	for (new i = 0;i<=g_iArenaCount;i++)
-	{
-		if(g_bArenaBBall[i])
-		{
-			new Float:hoop_2_loc[3];
-			hoop_2_loc[0] = g_fArenaSpawnOrigin[i][g_iArenaSpawns[i]][0];
-			hoop_2_loc[1] = g_fArenaSpawnOrigin[i][g_iArenaSpawns[i]][1];
-			hoop_2_loc[2] = g_fArenaSpawnOrigin[i][g_iArenaSpawns[i]][2];
-			new Float:hoop_1_loc[3];
-			hoop_1_loc[0] = g_fArenaSpawnOrigin[i][g_iArenaSpawns[i]-1][0];
-			hoop_1_loc[1] = g_fArenaSpawnOrigin[i][g_iArenaSpawns[i]-1][1];
-			hoop_1_loc[2] = g_fArenaSpawnOrigin[i][g_iArenaSpawns[i]-1][2];
-			
-			if(IsValidEdict(g_iBBallHoop[i][SLOT_ONE]) && g_iBBallHoop[i][SLOT_ONE] > 0)
-			{
-				RemoveEdict(g_iBBallHoop[i][SLOT_ONE]);
-				g_iBBallHoop[i][SLOT_ONE] = -1;
-			} else if(g_iBBallHoop[i][SLOT_ONE] != -1) { // g_iBBallHoop[i][SLOT_ONE] equaling -1 is not a bad thing, so don't print an error for it.
-				//LogError("[%s] Event_RoundStart fired, but could not remove old hoop [%d]!.", g_sArenaName[i], g_iBBallHoop[i][SLOT_ONE]);
-				//LogError("[%s] Resetting SLOT_ONE hoop array index %i.", g_sArenaName[i], i);
-				g_iBBallHoop[i][SLOT_ONE] = -1;
-			}
-			
-			if(IsValidEdict(g_iBBallHoop[i][SLOT_TWO]) && g_iBBallHoop[i][SLOT_TWO] > 0)
-			{
-				RemoveEdict(g_iBBallHoop[i][SLOT_TWO]);
-				g_iBBallHoop[i][SLOT_TWO] = -1;
-			} else if(g_iBBallHoop[i][SLOT_TWO] != -1) { // g_iBBallHoop[i][SLOT_TWO] equaling -1 is not a bad thing, so don't print an error for it.
-				//LogError("[%s] Event_RoundStart fired, but could not remove old hoop [%d]!.", g_sArenaName[i], g_iBBallHoop[i][SLOT_TWO]);
-				//LogError("[%s] Resetting SLOT_TWO hoop array index %i.", g_sArenaName[i], i);
-				g_iBBallHoop[i][SLOT_TWO] = -1;
-			}
-			
-			if (g_iBBallHoop[i][SLOT_ONE] == -1)
-			{
-				g_iBBallHoop[i][SLOT_ONE] = CreateEntityByName("item_ammopack_small");
-				TeleportEntity(g_iBBallHoop[i][SLOT_ONE], hoop_1_loc, NULL_VECTOR, NULL_VECTOR);
-				DispatchSpawn(g_iBBallHoop[i][SLOT_ONE]);
-				SetEntProp(g_iBBallHoop[i][SLOT_ONE], Prop_Send, "m_iTeamNum", 1, 4);
 
-				SDKUnhook(g_iBBallHoop[i][SLOT_ONE], SDKHook_StartTouch, OnTouchHoop);
-				SDKHook(g_iBBallHoop[i][SLOT_ONE], SDKHook_StartTouch, OnTouchHoop);
-			}
-			
-			if (g_iBBallHoop[i][SLOT_TWO] == -1)
-			{
-				g_iBBallHoop[i][SLOT_TWO] = CreateEntityByName("item_ammopack_small");
-				TeleportEntity(g_iBBallHoop[i][SLOT_TWO], hoop_2_loc, NULL_VECTOR, NULL_VECTOR);
-				DispatchSpawn(g_iBBallHoop[i][SLOT_TWO]);
-				SetEntProp(g_iBBallHoop[i][SLOT_TWO], Prop_Send, "m_iTeamNum", 1, 4);
-				
-				SDKUnhook(g_iBBallHoop[i][SLOT_TWO], SDKHook_StartTouch, OnTouchHoop);
-				SDKHook(g_iBBallHoop[i][SLOT_TWO], SDKHook_StartTouch, OnTouchHoop);
-			}
-			
-			if(g_bVisibleHoops[i] == false)
-			{
-				// Could have used SetRenderMode here, but it had the unfortunate side-effect of also making the intel invisible.
-				// Luckily, inputting "Disable" to most entities makes them invisible, so it was a valid workaround.
-				AcceptEntityInput(g_iBBallHoop[i][SLOT_ONE], "Disable");
-				AcceptEntityInput(g_iBBallHoop[i][SLOT_TWO], "Disable");
-			}
-		}
-	}
-	
 	return Plugin_Continue;
 }
 
@@ -3248,26 +2525,6 @@ public Action:Timer_Tele(Handle:timer, any:userid)
 	
 	new Float:vel[3]={0.0,0.0,0.0};
 	
-	// BBall handles spawns differently, each team (or rather, SLOT), has their own spawns.
-	if(g_bArenaBBall[arena_index])
-	{
-		new random_int;
-		new offset_high, offset_low;
-		if(g_iPlayerSlot[client] == SLOT_ONE)
-		{
-			offset_high = ((g_iArenaSpawns[arena_index] - 5) / 2);
-			random_int = GetRandomInt(1, offset_high); //The first half of the player spawns are for slot one.
-		} else {
-			offset_high = (g_iArenaSpawns[arena_index] - 5);
-			offset_low = (((g_iArenaSpawns[arena_index] - 5) / 2) + 1);
-			random_int = GetRandomInt(offset_low, offset_high); //The last 5 spawns are for the intel and trigger spawns, not players.
-		}
-		
-		TeleportEntity(client,g_fArenaSpawnOrigin[arena_index][random_int],g_fArenaSpawnAngles[arena_index][random_int],vel);
-		EmitAmbientSound("items/spawn_item.wav", g_fArenaSpawnOrigin[arena_index][random_int], _, SNDLEVEL_NORMAL, _, 1.0);
-		ShowPlayerHud(client);
-		return;
-	}
 	
 	// Create an array that can hold all the arena's spawns.
 	new RandomSpawn[g_iArenaSpawns[arena_index]+1];
@@ -3381,7 +2638,7 @@ public Action:Timer_ShowAdv(Handle:timer, any:userid)
 	
 	return Plugin_Continue;
 }
-
+//TODO: does this work?
 public Action:Timer_GiveAmmo(Handle:timer, any:userid)
 {
 	new client = GetClientOfUserId(userid);
@@ -3406,20 +2663,6 @@ public Action:Timer_GiveAmmo(Handle:timer, any:userid)
 		
 		if (IsValidEntity(weapon))
 			SetEntProp(weapon, Prop_Send, "m_iClip1", g_iPlayerClip[client][SLOT_TWO]);
-	}
-}
-
-public Action:Timer_DeleteParticle(Handle:timer, any:particle)
-{
-	if (IsValidEdict(particle))
-	{
-		new String:classname[64];
-		GetEdictClassname(particle, classname, sizeof(classname));
-		
-		if (StrEqual(classname, "info_particle_system", false))
-		{
-			RemoveEdict(particle);
-		}
 	}
 }
 
@@ -3489,52 +2732,4 @@ bool:IsValidClient(iClient)
 	if(IsClientInKickQueue(iClient))
 		return false;
 	return IsClientInGame(iClient);
-}
-
-/* ShootsRocketsOrPipes()
- *
- * Does this player's gun shoot rockets or pipes? 
- * -------------------------------------------------------------------------- */
-bool:ShootsRocketsOrPipes(client)
-{
-	decl String:weapon[64];
-	GetClientWeapon(client, weapon, sizeof(weapon));
-	return (StrContains(weapon, "tf_weapon_rocketlauncher") == 0)|| StrEqual(weapon, "tf_weapon_grenadelauncher");
-}
-
-/* DistanceAboveGround()
- *
- * How high off the ground is the player?
- * -------------------------------------------------------------------------- */
-Float:DistanceAboveGround(victim)
-{
-	decl Float:vStart[3];
-	decl Float:vEnd[3];
-	new Float:vAngles[3]={90.0,0.0,0.0};
-	GetClientAbsOrigin(victim,vStart);
-	new Handle:trace = TR_TraceRayFilterEx(vStart, vAngles, MASK_SHOT, RayType_Infinite,TraceEntityFilterPlayer);
-
-	new Float:distance = -1.0;
-	if(TR_DidHit(trace))
-	{   	 
-		TR_GetEndPosition(vEnd, trace);
-		distance = GetVectorDistance(vStart, vEnd, false);
-	} else  {
-		LogError("trace error. victim %N(%d)",victim,victim);
-	}
-	
-	CloseHandle(trace);
-	return distance;
-}
-
-/* FindEntityByClassname2()
- *
- * Finds entites, and won't error out when searching invalid entities.
- * -------------------------------------------------------------------------- */
-stock FindEntityByClassname2(startEnt, const String:classname[])
-{
-	/* If startEnt isn't valid shifting it back to the nearest valid one */
-	while (startEnt > -1 && !IsValidEntity(startEnt)) startEnt--;
-
-	return FindEntityByClassname(startEnt, classname);
 }
